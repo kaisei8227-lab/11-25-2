@@ -58,9 +58,9 @@ public class LobbyController {
         u.put("seen", System.currentTimeMillis());
 
         if (isNew) {
-            messaging.convertAndSend("/topic/lobby", Map.of("type", "STATE", "users", snapshot()));
+            send("/topic/lobby", Map.of("type", "STATE", "users", snapshot()));
         } else {
-            messaging.convertAndSend("/topic/lobby", Map.of("type", "MOVE", "user", publicView(u)));
+            send("/topic/lobby", Map.of("type", "MOVE", "user", publicView(u)));
         }
     }
 
@@ -71,7 +71,7 @@ public class LobbyController {
         String text = limit(req.get("text"), 100);
         if (text.isEmpty()) return;
         present.get(id).put("seen", System.currentTimeMillis());
-        messaging.convertAndSend("/topic/lobby", Map.of(
+        send("/topic/lobby", Map.of(
                 "type", "CHAT", "userId", id, "name", present.get(id).getOrDefault("name", ""), "text", text));
     }
 
@@ -80,21 +80,21 @@ public class LobbyController {
         Long id = userId(req);
         String emote = limit(req.get("emote"), 4);
         if (id == null || !present.containsKey(id) || !EMOTES.contains(emote)) return;
-        messaging.convertAndSend("/topic/lobby", Map.of("type", "EMOTE", "userId", id, "emote", emote));
+        send("/topic/lobby", Map.of("type", "EMOTE", "userId", id, "emote", emote));
     }
 
     @MessageMapping("/lobby/leave")
     public void leave(@Payload Map<String, Object> req) {
         Long id = userId(req);
         if (id == null || present.remove(id) == null) return;
-        messaging.convertAndSend("/topic/lobby", Map.of("type", "LEAVE", "userId", id));
+        send("/topic/lobby", Map.of("type", "LEAVE", "userId", id));
     }
 
     private void pruneOld() {
         long now = System.currentTimeMillis();
         present.entrySet().removeIf(e -> {
             boolean old = now - ((Number) e.getValue().getOrDefault("seen", 0L)).longValue() > TIMEOUT_MS;
-            if (old) messaging.convertAndSend("/topic/lobby", Map.of("type", "LEAVE", "userId", e.getKey()));
+            if (old) send("/topic/lobby", Map.of("type", "LEAVE", "userId", e.getKey()));
             return old;
         });
     }
@@ -127,5 +127,13 @@ public class LobbyController {
         if (!(v instanceof String s)) return "";
         s = s.trim();
         return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    /**
+     * Spring 7 では convertAndSend(宛先, Map) が「宛先＋本文」と「本文＋ヘッダー」のどちらにも当てはまって
+     * コンパイルエラーになるため、本文を Object として渡す
+     */
+    private void send(String destination, Object payload) {
+        messaging.convertAndSend(destination, payload);
     }
 }

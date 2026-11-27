@@ -78,7 +78,7 @@ public class MatchController {
         start.put("players", room.getPlayers()); // 先頭が先攻
         start.put("mode", mode);
         for (MatchRoom.Entry p : room.getPlayers()) {
-            messaging.convertAndSend("/topic/match/" + p.id(), start);
+            send("/topic/match/" + p.id(), start);
         }
     }
 
@@ -102,7 +102,7 @@ public class MatchController {
         if (!(by instanceof Number n) || !room.hasPlayer(n.longValue())) return;
 
         action.put("seq", room.nextSeq());
-        messaging.convertAndSend("/topic/room/" + roomId, action);
+        send("/topic/room/" + roomId, action);
     }
 
     /** 両者の報告がそろって一致したら結果を保存する */
@@ -140,5 +140,13 @@ public class MatchController {
             u.setLosses(u.getLosses() + 1);
             userRepository.save(u);
         });
+    }
+
+    /**
+     * Spring 7 では convertAndSend(宛先, Map) が「宛先＋本文」と「本文＋ヘッダー」のどちらにも当てはまって
+     * コンパイルエラーになるため、本文を Object として渡す
+     */
+    private void send(String destination, Object payload) {
+        messaging.convertAndSend(destination, payload);
     }
 }
